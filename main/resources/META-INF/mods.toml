@@ -1,0 +1,27 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+
+[[mods]]
+modId="jujutsureborn"
+version="1.2.8"
+displayName="Abyss"
+authors="Ghosts"
+description="Endlessly sinking"
+
+[[dependencies.jujutsureborn]]
+    modId="forge"
+    mandatory=true
+    versionRange="[47,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.jujutsureborn]]
+    modId="jujutsucraft"
+    mandatory=true
+    versionRange="[50,]"
+    ordering="BEFORE"
+    side="BOTH"
+
+[[mixins]]
+    config = "mixins.jujutsureborn.json"

@@ -1,0 +1,32 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.ghosts.jujutsureborn.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "jujutsureborn.refmap.json",
+  "mixins": [
+    "CentralKeyHookMixin",
+    "UroInfiniteSkyDisplayMixin",
+    "UroInfiniteSkyExecuteMixin",
+    "TenShadowsExecuteMixin",
+    "TenShadowsShadowDiveMixin",
+    "TodoPebbleDisplayMixin",
+    "TodoPebbleExecuteMixin",
+    "KaoriSelfLapseDisplayMixin",
+    "KaoriSelfLapseExecuteMixin",
+    "MixinStevensonScreenEntity",
+    "HideXpTextMixin",
+    "MixinMythicalBeastAmber",
+    "CombatHudRendererMixin",
+    "SixEyesSlashMixin",
+    "HideArmorInShadowDiveMixin",
+    "HideFourArmsInShadowDiveMixin",
+    "CharmGlintMixin",
+    "CameraTiltMixin",
+    "DivergentFistBlackFlashMixin",
+    "DivergentFistKeyMixin",
+    "RangeAttackForceBlackFlashMixin",
+    "CustomRarityMixin",
+    "DivergentFistLogicStartMixin"
+  ]
+}

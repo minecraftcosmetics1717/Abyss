@@ -29,5 +29,19 @@ public class ModNetwork {
                 PacketSyncShadowDive::encode,
                 PacketSyncShadowDive::new,
                 PacketSyncShadowDive::handle);
+
+        // Phone teleport
+        CHANNEL.registerMessage(id++, RequestTeleportPacket.class,
+                RequestTeleportPacket::encode,
+                RequestTeleportPacket::new,
+                RequestTeleportPacket::handle);
+        CHANNEL.registerMessage(id++, TeleportRequestNotifyPacket.class,
+                TeleportRequestNotifyPacket::encode,
+                TeleportRequestNotifyPacket::new,
+                TeleportRequestNotifyPacket::handle);
+        CHANNEL.registerMessage(id++, RespondTeleportPacket.class,
+                RespondTeleportPacket::encode,
+                RespondTeleportPacket::new,
+                RespondTeleportPacket::handle);
     }
 }

@@ -34,7 +34,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class DivergentFistBlackFlashMixin {
 
     private static final int WINDOW_END_TICK = 8; // 0.40s resolve
-    private static final int BF_COMBAT_COOLDOWN_TICKS = 50;
+    private static final int MISS_COMBAT_COOLDOWN_TICKS = 50; // only applied on miss
 
     @Inject(method = "execute", at = @At("HEAD"), cancellable = true, remap = false)
     private static void jreborn$divergentFist(LevelAccessor world, double x, double y, double z, Entity entity, CallbackInfo ci) {
@@ -42,24 +42,25 @@ public class DivergentFistBlackFlashMixin {
 
         CompoundTag nbt = entity.getPersistentData();
 
-        // Phase 1 = vanilla
+        // Phase 1 = let vanilla run
         if (nbt.getDouble("cnt7") == 0.0D) {
             return;
         }
 
-        // Handle phase 2 ourselves
+        // We fully handle phase 2
         ci.cancel();
 
         nbt.putBoolean("jreborn_df_active", true);
 
-        // Open timing window once
+        // Open the timing window only once
         if (!nbt.getBoolean("jreborn_df_window_open")) {
             nbt.putBoolean("jreborn_df_window_open", true);
             nbt.putBoolean("jreborn_df_bf", false);
             nbt.putBoolean("jreborn_df_early", false);
             nbt.putInt("jreborn_df_ticks", 0);
 
-            // Allow re-press during the real BF window
+            // Only remove combat cooldown so the technique key can be pressed again.
+            // Do NOT remove CURSED_TECHNIQUE – that keeps the skill ticking.
             if (entity instanceof LivingEntity living) {
                 MobEffect combatCd = ForgeRegistries.MOB_EFFECTS.getValue(
                         new ResourceLocation("jujutsucraft", "cooldown_time_combat")
@@ -74,21 +75,21 @@ public class DivergentFistBlackFlashMixin {
         nbt.putInt("jreborn_df_ticks", ticks);
         nbt.putDouble("cnt1", (double) ticks);
 
-        // Same cancel as original
+        // Cancel if Physical Gifted is active (same as original)
         if (entity instanceof LivingEntity living) {
             MobEffect physicalGifted = JujutsucraftModMobEffects.PHYSICAL_GIFTED_EFFECT.get();
             if (physicalGifted != null && living.hasEffect(physicalGifted)) {
-                clearDfState(nbt);
-                nbt.putDouble("skill", 0.0D);
+                endDivergentFist(entity, nbt, false); // treat as miss → apply cooldown
                 return;
             }
         }
 
-        // Wait until 0.40s
+        // Still waiting for the end of the window
         if (ticks < WINDOW_END_TICK) {
             return;
         }
 
+        // Window finished – decide Black Flash or normal second hit
         boolean blackFlash = nbt.getBoolean("jreborn_df_bf") && !nbt.getBoolean("jreborn_df_early");
 
         double cnt6 = nbt.getDouble("cnt6");
@@ -97,12 +98,33 @@ public class DivergentFistBlackFlashMixin {
 
         if (blackFlash) {
             doForcedBlackFlash(world, entity, nbt, cnt6Multiplier, sizeSquared);
+            endDivergentFist(entity, nbt, true);  // success → NO cooldown
         } else {
             doNormalSecondHit(world, entity, nbt, cnt6Multiplier, sizeSquared);
+            endDivergentFist(entity, nbt, false); // miss → apply cooldown
         }
+    }
 
+    /**
+     * @param success true = landed the Black Flash timing (no cooldown)
+     *                false = missed timing (apply combat cooldown)
+     */
+    private static void endDivergentFist(Entity entity, CompoundTag nbt, boolean success) {
         clearDfState(nbt);
         nbt.putDouble("skill", 0.0D);
+
+        // Properly end the skill so other techniques can be used again
+        if (entity instanceof LivingEntity living) {
+            MobEffect cursedTech = JujutsucraftModMobEffects.CURSED_TECHNIQUE.get();
+            if (cursedTech != null && living.hasEffect(cursedTech)) {
+                living.removeEffect(cursedTech);
+            }
+
+            // Only apply combat cooldown when the player MISSED the timing
+            if (!success) {
+                applyCombatCooldown(living);
+            }
+        }
     }
 
     private static void doNormalSecondHit(LevelAccessor world, Entity entity, CompoundTag nbt,
@@ -136,7 +158,6 @@ public class DivergentFistBlackFlashMixin {
                                            double cnt6Multiplier, double sizeSquared) {
         double cnt6 = nbt.getDouble("cnt6");
 
-        // Strong-punch style base (multiplier applied after DamageFix in RangeAttack mixin)
         double giftFactor = 0.2D;
         if (entity instanceof LivingEntity living
                 && living.hasEffect(JujutsucraftModMobEffects.PHYSICAL_GIFTED_EFFECT.get())) {
@@ -151,17 +172,12 @@ public class DivergentFistBlackFlashMixin {
         nbt.putDouble("projectile_type", 1.0D);
         nbt.putBoolean("attack", true);
 
-        // Mark for BF mult after DamageFix
         nbt.putBoolean("jreborn_force_bf", true);
 
-        // Block natural BF roll (prevents a second ×4)
         double oldSkill = nbt.getDouble("skill");
         nbt.putDouble("skill", 2105.0D);
 
-        // Aim at enemy hit by first DF punch, if still valid
-        double ix;
-        double iy;
-        double iz;
+        double ix, iy, iz;
 
         Entity tracked = null;
         if (nbt.hasUUID("jreborn_df_last_target") && world instanceof ServerLevel server) {
@@ -188,7 +204,7 @@ public class DivergentFistBlackFlashMixin {
         spawnBlackFlashEntity(world, ix, iy, iz);
         applyZone(entity);
         playBlackFlashEffects(world, ix, iy, iz);
-        applyCombatCooldown(entity);
+        // NO cooldown here on purpose – successful Black Flash lets you chain
     }
 
     private static void spawnBlackFlashEntity(LevelAccessor world, double x, double y, double z) {
@@ -211,9 +227,7 @@ public class DivergentFistBlackFlashMixin {
         }
     }
 
-    private static void applyCombatCooldown(Entity entity) {
-        if (!(entity instanceof LivingEntity living)) return;
-
+    private static void applyCombatCooldown(LivingEntity living) {
         MobEffect combatCd = ForgeRegistries.MOB_EFFECTS.getValue(
                 new ResourceLocation("jujutsucraft", "cooldown_time_combat")
         );
@@ -223,7 +237,7 @@ public class DivergentFistBlackFlashMixin {
         if (combatCd != null) {
             living.addEffect(new MobEffectInstance(
                     combatCd,
-                    BF_COMBAT_COOLDOWN_TICKS,
+                    MISS_COMBAT_COOLDOWN_TICKS,
                     0,
                     false,
                     false
@@ -240,15 +254,15 @@ public class DivergentFistBlackFlashMixin {
             SoundEvent impact = ForgeRegistries.SOUND_EVENTS.getValue(new ResourceLocation("entity.lightning_bolt.impact"));
 
             if (shock != null) {
-                level.playSound((Player) null, pos, shock, SoundSource.NEUTRAL, 1.0F, 0.75F);
-                level.playSound((Player) null, pos, shock, SoundSource.NEUTRAL, 1.0F, 1.0F);
-                level.playSound((Player) null, pos, shock, SoundSource.NEUTRAL, 1.0F, 1.25F);
+                level.playSound(null, pos, shock, SoundSource.NEUTRAL, 1.0F, 0.75F);
+                level.playSound(null, pos, shock, SoundSource.NEUTRAL, 1.0F, 1.0F);
+                level.playSound(null, pos, shock, SoundSource.NEUTRAL, 1.0F, 1.25F);
             }
             if (thunder != null) {
-                level.playSound((Player) null, pos, thunder, SoundSource.NEUTRAL, 1.0F, 1.0F);
+                level.playSound(null, pos, thunder, SoundSource.NEUTRAL, 1.0F, 1.0F);
             }
             if (impact != null) {
-                level.playSound((Player) null, pos, impact, SoundSource.NEUTRAL, 1.0F, 1.0F);
+                level.playSound(null, pos, impact, SoundSource.NEUTRAL, 1.0F, 1.0F);
             }
         }
 
